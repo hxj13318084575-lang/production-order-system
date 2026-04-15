@@ -52,7 +52,27 @@
   .role-plan .icon { background: #e8f0fe; }
   .role-production .icon { background: #fef7e0; }
   .role-pack .icon { background: #e6f4ea; }
-  .role-ship .icon { background: #f3e8fd; }
+  .login-avatar:hover { border-color: var(--danger); }
+
+  /* 密码输入 */
+  .login-prompt {
+    position: fixed; inset: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    display: none; align-items: center; justify-content: center; z-index: 10000;
+  }
+  .login-prompt.show { display: flex; }
+  .login-prompt-box {
+    background: #fff; border-radius: 16px; padding: 36px 32px; width: 360px; max-width: 90vw;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3); text-align: center;
+  }
+  .login-prompt-box h2 { font-size: 20px; margin-bottom: 6px; }
+  .login-prompt-box p { color: var(--gray-500); font-size: 13px; margin-bottom: 20px; }
+  .login-prompt-box input {
+    width: 100%; padding: 12px 16px; border: 2px solid var(--gray-300); border-radius: 10px;
+    font-size: 16px; outline: none; text-align: center; letter-spacing: 4px;
+  }
+  .login-prompt-box input:focus { border-color: var(--primary); }
+  .login-prompt-box .prompt-actions { display: flex; gap: 10px; margin-top: 20px; justify-content: center; }
+  .login-prompt-box .prompt-actions .btn { min-width: 100px; }
 
   /* ====== 顶栏 ====== */
   .top-bar {
@@ -213,9 +233,19 @@
   .img-modal {
     display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 9999;
     align-items: center; justify-content: center; cursor: zoom-out;
+    -webkit-tap-highlight-color: transparent; touch-action: manipulation;
   }
   .img-modal.show { display: flex; }
-  .img-modal img { max-width: 90vw; max-height: 90vh; border-radius: 8px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); }
+  .img-modal img { max-width: 92vw; max-height: 92vh; border-radius: 8px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); object-fit: contain; }
+  /* 手机端关闭提示 */
+  .img-modal::after {
+    content: '点击任意位置关闭'; position: fixed; bottom: 20px; left: 50%;
+    transform: translateX(-50%); color: rgba(255,255,255,0.6); font-size: 13px;
+    pointer-events: none;
+  }
+  @media (min-width: 769px) {
+    .img-modal::after { display: none; }
+  }
 
   /* 流程状态 */
   .status-badge {
@@ -471,7 +501,7 @@
   <div class="login-box">
     <h1>🏭 智能生产订单系统</h1>
     <p>请选择你的身份登录</p>
-    <div class="avatar-grid">
+    <div class="avatar-grid" style="grid-template-columns: repeat(2, 1fr);">
       <div class="login-avatar role-admin" onclick="login('admin')">
         <div class="icon">👑</div>
         <div class="name">管理员</div>
@@ -489,19 +519,25 @@
       </div>
       <div class="login-avatar role-pack" onclick="login('pack')">
         <div class="icon">📦</div>
-        <div class="name">打包人员</div>
-        <div class="role">仅查看</div>
-      </div>
-      <div class="login-avatar role-ship" onclick="login('ship')">
-        <div class="icon">🚚</div>
-        <div class="name">发货人员</div>
+        <div class="name">打包发货</div>
         <div class="role">打包发货</div>
       </div>
     </div>
   </div>
 </div>
 
-<!-- 云端连接状态 -->
+<!-- 密码输入弹窗 -->
+<div id="loginPrompt" class="login-prompt">
+  <div class="login-prompt-box">
+    <h2 id="promptTitle">请输入密码</h2>
+    <p id="promptSubtitle">管理员登录需要密码验证</p>
+    <input type="password" id="promptPassword" placeholder="请输入密码" onkeydown="if(event.key==='Enter')verifyPassword()">
+    <div class="prompt-actions">
+      <button class="btn btn-outline" onclick="cancelPassword()">返回</button>
+      <button class="btn btn-primary" onclick="verifyPassword()">确认</button>
+    </div>
+  </div>
+</div>
 <div id="cloudStatus" style="display:none;position:fixed;top:0;left:0;right:0;background:#fff3cd;color:#856404;text-align:center;padding:6px;font-size:13px;z-index:9998;border-bottom:1px solid #ffc107;">
   🔄 正在连接云端数据库...
 </div>
@@ -580,11 +616,11 @@
           <th>商品名称</th>
           <th>订单编号 <span style="color:var(--danger)">*</span></th>
           <th>规格</th>
-          <th class="img-cell">商品图片</th>
           <th>数量</th>
           <th>当前状态</th>
-          <th>物流单号</th>
-          <th class="img-cell">物流单</th>
+          <th class="img-cell" id="thProductImg">商品图片</th>
+          <th class="img-cell" id="thLogisticsNo" style="display:none;">物流单号</th>
+          <th class="img-cell" id="thLogisticsImg" style="display:none;">物流单</th>
           <th>备注</th>
           <th>创建时间</th>
           <th>完成时间</th>
@@ -690,17 +726,9 @@
             <td style="color:var(--danger)">❌</td>
           </tr>
           <tr>
-            <td><strong>📦 打包人员</strong></td>
+            <td><strong>📦 打包发货</strong></td>
             <td style="color:var(--danger)">❌</td>
-            <td style="color:var(--success)">✅</td>
-            <td style="color:var(--danger)">❌</td>
-            <td style="color:var(--success)">✅</td>
-            <td style="color:var(--success)">✅</td>
-          </tr>
-          <tr>
-            <td><strong>🚚 发货人员</strong></td>
-            <td style="color:var(--danger)">❌</td>
-            <td style="color:var(--success)">✅ <span style="font-size:11px;color:var(--gray-500)">（打包/发货）</span></td>
+            <td style="color:var(--success)">✅ <span style="font-size:11px;color:var(--gray-500)">（全部状态）</span></td>
             <td style="color:var(--danger)">❌</td>
             <td style="color:var(--success)">✅</td>
             <td style="color:var(--danger)">❌</td>
@@ -805,8 +833,15 @@ const ROLES = {
   'admin': { name: '管理员', badge: 'badge-admin', canEdit: true, canChangeStatus: true, canDelete: true, canManagePerm: true, canShip: true },
   'plan': { name: '计划/仓库', badge: 'badge-plan', canEdit: true, canChangeStatus: true, canDelete: false, canManagePerm: false, canShip: false },
   'production': { name: '生产车间', badge: 'badge-production', canEdit: false, canChangeStatus: true, canDelete: false, canManagePerm: false, canShip: false },
-  'pack': { name: '打包人员', badge: 'badge-pack', canEdit: false, canChangeStatus: true, canDelete: false, canManagePerm: false, canShip: true },
-  'ship': { name: '发货人员', badge: 'badge-ship', canEdit: false, canChangeStatus: true, canDelete: false, canManagePerm: false, canShip: true }
+  'pack': { name: '打包发货', badge: 'badge-pack', canEdit: false, canChangeStatus: true, canDelete: false, canManagePerm: false, canShip: true }
+};
+
+// ========== 密码配置 ==========
+const ROLE_PASSWORDS = {
+  'admin': 'admin888',
+  'plan': 'plan123',
+  'production': 'prod123',
+  'pack': 'pack123'
 };
 
 // ========== 云数据库初始化 ==========
@@ -1041,7 +1076,38 @@ async function resolveImageUrls(images) {
 }
 
 // ========== 登录 ==========
+let pendingRole = null;
+
 function login(role) {
+  pendingRole = role;
+  const r = ROLES[role];
+  const prompt = document.getElementById('loginPrompt');
+  document.getElementById('promptTitle').textContent = r.name + ' 登录';
+  document.getElementById('promptSubtitle').textContent = '请输入密码以登录「' + r.name + '」';
+  document.getElementById('promptPassword').value = '';
+  prompt.classList.add('show');
+  setTimeout(() => document.getElementById('promptPassword').focus(), 100);
+}
+
+function verifyPassword() {
+  const pwd = document.getElementById('promptPassword').value;
+  const expected = ROLE_PASSWORDS[pendingRole];
+  if (pwd === expected) {
+    document.getElementById('loginPrompt').classList.remove('show');
+    doLogin(pendingRole);
+  } else {
+    showToast('密码错误，请重试', 'error');
+    document.getElementById('promptPassword').value = '';
+    document.getElementById('promptPassword').focus();
+  }
+}
+
+function cancelPassword() {
+  document.getElementById('loginPrompt').classList.remove('show');
+  pendingRole = null;
+}
+
+function doLogin(role) {
   currentUser = role;
   localStorage.setItem(USER_KEY, role);
   document.getElementById('loginOverlay').style.display = 'none';
@@ -1055,6 +1121,11 @@ function login(role) {
 
   document.getElementById('btnAdd').style.display = r.canEdit ? '' : 'none';
   document.getElementById('btnPerm').style.display = r.canManagePerm ? '' : 'none';
+
+  // 根据角色控制列显示
+  const showLogistics = r.canShip || r.canEdit;
+  document.getElementById('thLogisticsNo').style.display = showLogistics ? '' : 'none';
+  document.getElementById('thLogisticsImg').style.display = showLogistics ? '' : 'none';
 
   renderTable();
   showToast('登录成功：' + r.name, 'success');
@@ -1188,9 +1259,8 @@ async function renderTable() {
 
     if (currentUser === 'production') {
       allowedStatuses = Object.entries(STATUS_MAP).filter(([key]) => ['pending', 'producing', 'done'].includes(key));
-    } else if (currentUser === 'pack' || currentUser === 'ship') {
-      allowedStatuses = Object.entries(STATUS_MAP).filter(([key]) => ['done', 'packed', 'shipped'].includes(key));
     }
+    // 其他角色可以切换所有状态（admin、plan、pack）
 
     // 图片展示 - 直接显示可点击放大
     let imgHtml = '';
@@ -1234,12 +1304,37 @@ async function renderTable() {
       statusHtml = `<span class="status-badge ${st.cls}"><span class="dot"></span>${st.name}</span>`;
     }
 
-    // 物流单号
+    // 物流信息 - 仅打包发货和管理员可见
+    const showLogistics = role.canShip || role.canEdit;
+
+    // 物流单号HTML
     let logisticsNoHtml = '';
-    if (role.canEdit || role.canShip) {
-      logisticsNoHtml = `<span class="editable-cell" ondblclick="editLogisticsNo('${orderId}', this)" title="双击编辑物流单号">${order.logisticsNo ? escapeHtml(order.logisticsNo) : '<span style="color:var(--gray-400);">双击填写</span>'}</span>`;
-    } else {
-      logisticsNoHtml = order.logisticsNo ? `<span class="order-id" style="background:#e6f4ea;color:#1e8e3e;">${escapeHtml(order.logisticsNo)}</span>` : '-';
+    let logisticsImgHtml = '';
+    if (showLogistics) {
+      // 物流单号
+      if (role.canEdit || role.canShip) {
+        logisticsNoHtml = `<span class="editable-cell" ondblclick="editLogisticsNo('${orderId}', this)" title="双击编辑物流单号">${order.logisticsNo ? escapeHtml(order.logisticsNo) : '<span style="color:var(--gray-400);">双击填写</span>'}</span>`;
+      } else {
+        logisticsNoHtml = order.logisticsNo ? `<span class="order-id" style="background:#e6f4ea;color:#1e8e3e;">${escapeHtml(order.logisticsNo)}</span>` : '-';
+      }
+
+      // 物流单图片
+      if (displayLogImages.length > 0) {
+        logisticsImgHtml = '<div style="display:flex;gap:6px;flex-wrap:wrap;">';
+        displayLogImages.forEach((img, imgIdx) => {
+          logisticsImgHtml += `<img src="${img}" alt="物流单" style="width:54px;height:54px;object-fit:cover;border-radius:8px;cursor:zoom-in;border:1px solid var(--gray-200);box-shadow:0 1px 3px rgba(0,0,0,0.08);" onclick="showImgModal('${img.replace(/'/g, "\\'")}')">`;
+        });
+        if (role.canEdit || role.canShip) {
+          logisticsImgHtml += `<div class="img-preview-container img-preview-sm" style="width:54px;height:54px;" ondragover="handleDragOver(event, this)" ondragleave="handleDragLeave(event, this)" ondrop="handleLogisticsDrop(event, '${orderId}', this)"><div class="placeholder" style="font-size:10px;">拖入</div></div>`;
+        }
+        logisticsImgHtml += '</div>';
+      } else {
+        logisticsImgHtml = '<div class="img-preview-container img-preview-sm" ';
+        if (role.canEdit || role.canShip) {
+          logisticsImgHtml += `ondragover="handleDragOver(event, this)" ondragleave="handleDragLeave(event, this)" ondrop="handleLogisticsDrop(event, '${orderId}', this)" `;
+        }
+        logisticsImgHtml += '><div class="placeholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg><span>无</span></div></div>';
+      }
     }
 
     // 操作按钮
@@ -1254,25 +1349,6 @@ async function renderTable() {
       actionHtml += `<button class="action-btn delete" title="删除" onclick="deleteOrder('${orderId}')">🗑️</button>`;
     }
     actionHtml += '</div>';
-
-    // 物流单图片 - 直接显示可点击放大
-    let logisticsImgHtml = '';
-    if (displayLogImages.length > 0) {
-      logisticsImgHtml = '<div style="display:flex;gap:6px;flex-wrap:wrap;">';
-      displayLogImages.forEach((img, imgIdx) => {
-        logisticsImgHtml += `<img src="${img}" alt="物流单" style="width:54px;height:54px;object-fit:cover;border-radius:8px;cursor:zoom-in;border:1px solid var(--gray-200);box-shadow:0 1px 3px rgba(0,0,0,0.08);" onclick="showImgModal('${img.replace(/'/g, "\\'")}')">`;
-      });
-      if (role.canEdit || role.canShip) {
-        logisticsImgHtml += `<div class="img-preview-container img-preview-sm" style="width:54px;height:54px;" ondragover="handleDragOver(event, this)" ondragleave="handleDragLeave(event, this)" ondrop="handleLogisticsDrop(event, '${orderId}', this)"><div class="placeholder" style="font-size:10px;">拖入</div></div>`;
-      }
-      logisticsImgHtml += '</div>';
-    } else {
-      logisticsImgHtml = '<div class="img-preview-container img-preview-sm" ';
-      if (role.canEdit || role.canShip) {
-        logisticsImgHtml += `ondragover="handleDragOver(event, this)" ondragleave="handleDragLeave(event, this)" ondrop="handleLogisticsDrop(event, '${orderId}', this)" `;
-      }
-      logisticsImgHtml += '><div class="placeholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg><span>无</span></div></div>';
-    }
 
     const rowCls = `row-${order.status || 'pending'}`;
 
@@ -1310,7 +1386,7 @@ async function renderTable() {
     }
 
     let mobileLogImgHtml = '';
-    if (displayLogImages.length > 0) {
+    if (showLogistics && displayLogImages.length > 0) {
       mobileLogImgHtml = '<div class="mobile-imgs">';
       displayLogImages.forEach(img => {
         mobileLogImgHtml += `<img src="${img}" alt="物流单" onclick="showImgModal('${img.replace(/'/g, "\\'")}')">`;
@@ -1325,7 +1401,7 @@ async function renderTable() {
     if (role.canDelete) mobileActionHtml += `<button class="action-btn delete" title="删除" onclick="deleteOrder('${orderId}')">🗑️</button>`;
 
     // 移动端物流单号
-    let mobileLogNo = order.logisticsNo ? escapeHtml(order.logisticsNo) : '<span style="color:#bbb;">无</span>';
+    let mobileLogNo = order.logisticsNo ? escapeHtml(order.logisticsNo) : '';
 
     return {
       desktop: `
@@ -1335,11 +1411,10 @@ async function renderTable() {
         <td style="font-weight:500;">${escapeHtml(order.customer || '-')}</td>
         <td><span class="order-id">${escapeHtml(order.orderNo || '-')}</span></td>
         <td>${escapeHtml(order.product || '-')}</td>
-        <td class="img-cell">${imgHtml}</td>
         <td><span class="quantity-display">${order.qty || 0}</span></td>
         <td>${statusHtml}</td>
-        <td>${logisticsNoHtml}</td>
-        <td class="img-cell">${logisticsImgHtml}</td>
+        <td class="img-cell">${imgHtml}</td>
+        ${showLogistics ? `<td>${logisticsNoHtml}</td><td class="img-cell">${logisticsImgHtml}</td>` : ''}
         <td style="max-width:220px; font-size:15px; color:var(--gray-600); line-height:1.5;">${escapeHtml(order.remark || '-')}</td>
         <td><span class="date-text">${formatDate(order.createdAt)}</span></td>
         <td><span class="date-text">${order.completedAt ? formatDate(order.completedAt) : '<span style="color:#ccc;">-</span>'}</span></td>
@@ -1358,10 +1433,10 @@ async function renderTable() {
           <div class="mobile-row"><span class="mobile-label">订单编号</span><span class="mobile-value" style="font-weight:600;">${escapeHtml(order.orderNo || '-')}</span></div>
           <div class="mobile-row"><span class="mobile-label">规格</span><span class="mobile-value">${escapeHtml(order.product || '-')}</span></div>
           <div class="mobile-row"><span class="mobile-label">数量</span><span class="mobile-value" style="font-weight:700;font-size:16px;color:var(--gray-900);">${order.qty || 0}</span></div>
-          ${order.logisticsNo ? `<div class="mobile-row"><span class="mobile-label">物流单号</span><span class="mobile-value">${mobileLogNo}</span></div>` : ''}
-          ${order.remark ? `<div class="mobile-row"><span class="mobile-label">备注</span><span class="mobile-value">${escapeHtml(order.remark)}</span></div>` : ''}
           ${mobileImgHtml ? `<div class="mobile-row"><span class="mobile-label">商品图片</span><span class="mobile-value">${mobileImgHtml}</span></div>` : ''}
-          ${mobileLogImgHtml ? `<div class="mobile-row"><span class="mobile-label">物流单</span><span class="mobile-value">${mobileLogImgHtml}</span></div>` : ''}
+          ${showLogistics && mobileLogNo ? `<div class="mobile-row"><span class="mobile-label">物流单号</span><span class="mobile-value">${mobileLogNo}</span></div>` : ''}
+          ${showLogistics && mobileLogImgHtml ? `<div class="mobile-row"><span class="mobile-label">物流单</span><span class="mobile-value">${mobileLogImgHtml}</span></div>` : ''}
+          ${order.remark ? `<div class="mobile-row"><span class="mobile-label">备注</span><span class="mobile-value">${escapeHtml(order.remark)}</span></div>` : ''}
           <div class="mobile-row"><span class="mobile-label">创建时间</span><span class="mobile-value" style="font-weight:600;font-size:13px;">${formatDate(order.createdAt)}</span></div>
           ${order.completedAt ? `<div class="mobile-row"><span class="mobile-label">完成时间</span><span class="mobile-value" style="font-weight:600;font-size:13px;">${formatDate(order.completedAt)}</span></div>` : ''}
         </div>
@@ -1475,12 +1550,17 @@ function addOrderRow(data) {
       </div>
     </div>
     <div class="form-group">
-      <label>商品图片（点击上传，可多张）</label>
+      <label>商品图片（点击上传或拖入图片，可多张）</label>
       <div class="upload-zone" style="min-height:100px;padding:12px;" id="rowUploadZone-${idx}"
-           onclick="document.getElementById('rowFile-${idx}').click()">
+           onclick="document.getElementById('rowFile-${idx}').click()"
+           ondragover="handleDragOver(event, this)"
+           ondragleave="handleDragLeave(event, this)"
+           ondrop="handleRowDragDrop(event, ${idx}, this)">
         <input type="file" id="rowFile-${idx}" multiple accept="image/*" style="display:none" onchange="handleRowFileSelect(event, ${idx})">
         <div id="rowUploadPlaceholder-${idx}">
-          <div class="hint">点击上传商品图片</div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:32px;height:32px;color:var(--gray-400);margin-bottom:4px;"><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+          <div class="hint">点击上传或拖入图片</div>
+          <div class="hint-sub">支持 JPG、PNG 格式</div>
         </div>
         <div id="rowPreviewGrid-${idx}" class="preview-grid" style="display:none;"></div>
       </div>
@@ -1504,6 +1584,24 @@ function handleRowFileSelect(event, rowIdx) {
   const files = Array.from(event.target.files);
   if (!rowImagesMap[rowIdx]) rowImagesMap[rowIdx] = [];
   files.forEach(f => {
+    if (!f.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      rowImagesMap[rowIdx].push(e.target.result);
+      updateRowPreview(rowIdx);
+    };
+    reader.readAsDataURL(f);
+  });
+  event.target.value = '';
+}
+
+function handleRowDragDrop(event, rowIdx, el) {
+  event.preventDefault(); event.stopPropagation();
+  el.classList.remove('drag-over');
+  const files = Array.from(event.dataTransfer.files);
+  if (!rowImagesMap[rowIdx]) rowImagesMap[rowIdx] = [];
+  files.forEach(f => {
+    if (!f.type.startsWith('image/')) return;
     const reader = new FileReader();
     reader.onload = (e) => {
       rowImagesMap[rowIdx].push(e.target.result);
@@ -2041,6 +2139,7 @@ async function saveLogisticsInfo() {
 
 // ========== 图片查看 ==========
 function showImgModal(url) {
+  if (!url) return;
   document.getElementById('imgModalSrc').src = url;
   document.getElementById('imgModal').classList.add('show');
 }
