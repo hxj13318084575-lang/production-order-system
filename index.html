@@ -1562,8 +1562,8 @@ function addOrderRow(data) {
         <input type="file" id="rowFile-${idx}" multiple accept="image/*" style="display:none" onchange="handleRowFileSelect(event, ${idx})">
         <div id="rowUploadPlaceholder-${idx}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:32px;height:32px;color:var(--gray-400);margin-bottom:4px;"><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-          <div class="hint">点击上传或拖入图片</div>
-          <div class="hint-sub">支持 JPG、PNG 格式</div>
+          <div class="hint">点击上传、拖入图片或直接粘贴截图</div>
+          <div class="hint-sub">支持截图直接 Ctrl+V 粘贴</div>
         </div>
         <div id="rowPreviewGrid-${idx}" class="preview-grid" style="display:none;"></div>
       </div>
@@ -1585,6 +1585,11 @@ let rowImagesMap = {};
 
 function handleRowFileSelect(event, rowIdx) {
   const files = Array.from(event.target.files);
+  addRowImagesFromFiles(rowIdx, files);
+  event.target.value = '';
+}
+
+function addRowImagesFromFiles(rowIdx, files) {
   if (!rowImagesMap[rowIdx]) rowImagesMap[rowIdx] = [];
   files.forEach(f => {
     if (!f.type.startsWith('image/')) return;
@@ -1595,24 +1600,47 @@ function handleRowFileSelect(event, rowIdx) {
     };
     reader.readAsDataURL(f);
   });
-  event.target.value = '';
 }
 
 function handleRowDragDrop(event, rowIdx, el) {
   event.preventDefault(); event.stopPropagation();
   el.classList.remove('drag-over');
-  const files = Array.from(event.dataTransfer.files);
-  if (!rowImagesMap[rowIdx]) rowImagesMap[rowIdx] = [];
-  files.forEach(f => {
-    if (!f.type.startsWith('image/')) return;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      rowImagesMap[rowIdx].push(e.target.result);
-      updateRowPreview(rowIdx);
-    };
-    reader.readAsDataURL(f);
-  });
+  addRowImagesFromFiles(rowIdx, Array.from(event.dataTransfer.files));
 }
+
+// 粘贴截图支持 - 批量新增订单
+let bulkAddActiveRow = -1;
+document.addEventListener('paste', function(e) {
+  if (!document.getElementById('bulkAddModal') || document.getElementById('bulkAddModal').style.display !== 'flex') return;
+  const items = e.clipboardData && e.clipboardData.items;
+  if (!items) return;
+  const imageFiles = [];
+  for (let i = 0; i < items.length; i++) {
+    if (items[i].type.indexOf('image') !== -1) {
+      imageFiles.push(items[i].getAsFile());
+    }
+  }
+  if (imageFiles.length === 0) return;
+  e.preventDefault();
+  // 如果没有激活行，自动激活最后一行
+  if (bulkAddActiveRow < 0) {
+    const rows = document.querySelectorAll('.bulk-row');
+    if (rows.length > 0) {
+      const lastRow = rows[rows.length - 1];
+      const clickArea = lastRow.querySelector('.img-upload-area');
+      if (clickArea) {
+        clickArea.click();
+      }
+    }
+  }
+  // 添加到最后一个有图片区域的行
+  const rows = document.querySelectorAll('.bulk-row');
+  if (rows.length > 0) {
+    // 找到最后一个存在的行索引
+    const lastIdx = rows.length - 1;
+    addRowImagesFromFiles(lastIdx, imageFiles);
+  }
+});
 
 function updateRowPreview(rowIdx) {
   const grid = document.getElementById(`rowPreviewGrid-${rowIdx}`);
