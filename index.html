@@ -647,6 +647,25 @@
       <button class="modal-close" onclick="closeModal()">&times;</button>
     </div>
     <div class="modal-body">
+      <!-- 公共图片区域 - 粘贴/上传/拖入 -->
+      <div class="form-group">
+        <label>商品图片</label>
+        <div class="upload-zone" style="min-height:80px;padding:12px;" id="publicImageZone"
+             ondragover="event.preventDefault();this.style.borderColor='var(--primary)';this.style.background='#f0f7ff';"
+             ondragleave="this.style.borderColor='';this.style.background='';"
+             ondrop="event.preventDefault();this.style.borderColor='';this.style.background='';handlePublicDrop(event);">
+          <div id="publicImagePreview" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;"></div>
+          <div id="publicImagePlaceholder">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+              <button type="button" class="btn btn-sm" style="padding:4px 12px;font-size:13px;" onclick="event.stopPropagation();document.getElementById('publicImageFile').click()">📷 点击上传</button>
+              <button type="button" class="btn btn-sm" style="padding:4px 12px;font-size:13px;background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;" onclick="event.stopPropagation();pasteFromClipboard()">📋 粘贴截图</button>
+              <span style="color:var(--gray-400);font-size:12px;">先截图，再点粘贴 / 拖入图片 / Ctrl+V</span>
+            </div>
+          </div>
+          <input type="file" id="publicImageFile" multiple accept="image/*" style="display:none" onchange="handlePublicFileSelect(event)">
+        </div>
+      </div>
+
       <!-- 通用字段 -->
       <div class="form-group">
         <label>订单来源 <span class="required">*</span></label>
@@ -1553,19 +1572,11 @@ function addOrderRow(data) {
       </div>
     </div>
     <div class="form-group">
-      <label>商品图片（拖入图片或直接粘贴截图，可多张）</label>
-      <div class="upload-zone" style="min-height:100px;padding:12px;" id="rowUploadZone-${idx}"
-           ondragover="handleDragOver(event, this)"
-           ondragleave="handleDragLeave(event, this)"
-           ondrop="handleRowDragDrop(event, ${idx}, this)">
-        <input type="file" id="rowFile-${idx}" multiple accept="image/*" style="display:none" onchange="handleRowFileSelect(event, ${idx})">
-        <div id="rowUploadPlaceholder-${idx}">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:32px;height:32px;color:var(--gray-400);margin-bottom:4px;"><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-            <button type="button" class="btn btn-sm" style="padding:4px 12px;font-size:13px;" onclick="event.stopPropagation();document.getElementById('rowFile-${idx}').click()">📷 点击上传</button>
-            <button type="button" class="btn btn-sm" style="padding:4px 12px;font-size:13px;background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;" onclick="event.stopPropagation();pasteFromClipboard()">📋 粘贴截图</button>
-            <span style="color:var(--gray-400);font-size:12px;">或拖入图片 / Ctrl+V粘贴</span>
-          </div>
+      <label>图片预览</label>
+      <div id="rowImgPreview-${idx}" style="display:flex;gap:6px;flex-wrap:wrap;min-height:30px;align-items:center;">
+        <span style="color:var(--gray-400);font-size:12px;">上传图片后在此显示</span>
+      </div>
+    </div>
         </div>
         <div id="rowPreviewGrid-${idx}" class="preview-grid" style="display:none;"></div>
       </div>
@@ -1610,74 +1621,86 @@ function handleRowDragDrop(event, rowIdx, el) {
   addRowImagesFromFiles(rowIdx, Array.from(event.dataTransfer.files));
 }
 
-// ========== 粘贴截图功能 ==========
-// 粘贴截图支持 - 新增订单弹窗
+// ========== 公共图片区域（弹窗顶部） ==========
+let publicImages = []; // 存储公共区域的base64图片
+
+function updatePublicImagePreview() {
+  const preview = document.getElementById('publicImagePreview');
+  const placeholder = document.getElementById('publicImagePlaceholder');
+  if (!preview || !placeholder) return;
+  if (publicImages.length === 0) {
+    preview.innerHTML = '';
+    placeholder.style.display = '';
+  } else {
+    placeholder.style.display = 'none';
+    preview.innerHTML = publicImages.map((img, i) =>
+      `<div style="position:relative;display:inline-block;">
+        <img src="${img}" style="width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid #e8e8e8;">
+        <button type="button" onclick="event.stopPropagation();publicImages.splice(${i},1);updatePublicImagePreview();" style="position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;background:#ff4d4f;color:#fff;border:none;cursor:pointer;font-size:11px;line-height:18px;padding:0;">×</button>
+      </div>`
+    ).join('');
+  }
+}
+
+function handlePublicFileSelect(e) {
+  const files = Array.from(e.target.files || []);
+  files.forEach(f => {
+    if (!f.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => { publicImages.push(ev.target.result); updatePublicImagePreview(); };
+    reader.readAsDataURL(f);
+  });
+  e.target.value = '';
+}
+
+function handlePublicDrop(e) {
+  const files = Array.from(e.dataTransfer.files || []);
+  files.forEach(f => {
+    if (!f.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => { publicImages.push(ev.target.result); updatePublicImagePreview(); };
+    reader.readAsDataURL(f);
+  });
+}
+
+// 粘贴截图功能 - 新增订单弹窗
 document.addEventListener('paste', function(e) {
   const modal = document.getElementById('orderModal');
   if (!modal || !modal.classList.contains('show')) return;
   e.preventDefault();
 
-  // 方式1：从 clipboardData.files 获取
   const files = Array.from(e.clipboardData && e.clipboardData.files || []);
   const imageFiles = files.filter(f => f.type.startsWith('image/'));
-  if (imageFiles.length > 0) {
-    const rows = document.querySelectorAll('.bulk-row');
-    if (rows.length > 0) addRowImagesFromFiles(rows.length - 1, imageFiles);
-    return;
-  }
 
-  // 方式2：从 clipboardData.items 获取
   const items = e.clipboardData && e.clipboardData.items;
-  if (!items) { showToast('无法访问剪贴板，请使用截图工具截图后再试', 'error'); return; }
-  let found = false;
-  for (let i = 0; i < items.length; i++) {
-    if (items[i].type.indexOf('image') !== -1) {
-      found = true;
-      const file = items[i].getAsFile();
-      if (file) {
-        const rows = document.querySelectorAll('.bulk-row');
-        if (rows.length > 0) addRowImagesFromFiles(rows.length - 1, [file]);
-      } else {
-        // getAsFile返回null时，尝试读取为base64字符串
-        const FR = new FileReader();
-        FR.onload = () => {
-          const base64 = FR.result;
-          const rows = document.querySelectorAll('.bulk-row');
-          if (rows.length > 0) {
-            if (!rowImagesMap[rows.length - 1]) rowImagesMap[rows.length - 1] = [];
-            rowImagesMap[rows.length - 1].push(base64);
-            updateRowPreview(rows.length - 1);
-          }
-        };
-        items[i].getAsString && items[i].getAsString(s => {
-          if (s && s.startsWith('data:')) FR.readAsDataURL(new Blob([s], {type: items[i].type}));
-        });
+  if (items) {
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        const file = items[i].getAsFile();
+        if (file && imageFiles.indexOf(file) === -1) imageFiles.push(file);
       }
     }
   }
-  if (!found) showToast('剪贴板中没有图片，请先截图后再粘贴', 'error');
+
+  if (imageFiles.length === 0) { showToast('剪贴板中没有图片，请先截图后再粘贴', 'error'); return; }
+
+  imageFiles.forEach(f => {
+    const reader = new FileReader();
+    reader.onload = (ev) => { publicImages.push(ev.target.result); updatePublicImagePreview(); showToast('截图已添加', 'success'); };
+    reader.readAsDataURL(f);
+  });
 });
 
-// 粘贴按钮 - 点击直接读取剪贴板图片
+// 粘贴按钮 - 点击直接读取剪贴板
 async function pasteFromClipboard() {
-  const rows = document.querySelectorAll('.bulk-row');
-  if (rows.length === 0) { showToast('请先生成订单行', 'error'); return; }
-  const lastIdx = rows.length - 1;
-
   try {
-    // 尝试用Clipboard API（需要HTTPS）
     const items = await navigator.clipboard.read();
     for (const item of items) {
       for (const type of item.types) {
         if (type.startsWith('image/')) {
           const blob = await item.getType(type);
-          if (!rowImagesMap[lastIdx]) rowImagesMap[lastIdx] = [];
           const reader = new FileReader();
-          reader.onload = (e) => {
-            rowImagesMap[lastIdx].push(e.target.result);
-            updateRowPreview(lastIdx);
-            showToast('截图已粘贴到最后一个订单行', 'success');
-          };
+          reader.onload = (ev) => { publicImages.push(ev.target.result); updatePublicImagePreview(); showToast('截图已粘贴', 'success'); };
           reader.readAsDataURL(blob);
           return;
         }
@@ -1685,17 +1708,7 @@ async function pasteFromClipboard() {
     }
     showToast('剪贴板中没有图片，请先截图', 'error');
   } catch (err) {
-    // Clipboard API失败，尝试传统方式
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.click();
-    input.onchange = () => {
-      if (input.files && input.files[0]) {
-        addRowImagesFromFiles(lastIdx, [input.files[0]]);
-        showToast('截图已添加到最后一个订单行', 'success');
-      }
-    };
+    showToast('无法读取剪贴板，请用截图工具截图后直接 Ctrl+V 粘贴', 'error');
   }
 }
 
@@ -1729,12 +1742,14 @@ function removeRowImage(rowIdx, imgIdx) {
 function openAddModal() {
   editingId = null;
   rowImagesMap = {};
+  publicImages = [];
   orderRowCounter = 0;
   document.getElementById('modalTitle').textContent = '新增订单';
   document.getElementById('formSource').value = '';
   document.getElementById('formRemark').value = '';
   document.getElementById('orderRowsContainer').innerHTML = '';
   addOrderRow();
+  updatePublicImagePreview();
   document.getElementById('orderModal').classList.add('show');
 }
 
@@ -1759,16 +1774,14 @@ async function openEditModal(id) {
 
   editingId = id;
   rowImagesMap = {};
+  publicImages = order.images ? [...order.images] : [];
   orderRowCounter = 0;
   document.getElementById('modalTitle').textContent = '编辑订单';
   document.getElementById('formSource').value = order.source || '';
   document.getElementById('formRemark').value = order.remark || '';
   document.getElementById('orderRowsContainer').innerHTML = '';
   addOrderRow(order);
-  if (order.images && order.images.length > 0) {
-    rowImagesMap[orderRowCounter] = [...order.images];
-    updateRowPreview(orderRowCounter);
-  }
+  updatePublicImagePreview();
   document.getElementById('orderModal').classList.add('show');
 }
 
@@ -1776,6 +1789,8 @@ function closeModal() {
   document.getElementById('orderModal').classList.remove('show');
   editingId = null;
   rowImagesMap = {};
+  publicImages = [];
+  updatePublicImagePreview();
 }
 
 async function handleSaveAllOrders() {
@@ -1798,7 +1813,7 @@ async function handleSaveAllOrders() {
     const logisticsNo = document.getElementById(`rowLogistics-${idx}`).value.trim();
     if (!orderNo) { showToast('请填写订单编号', 'error'); return; }
     if (qty <= 0) { showToast('请填写有效数量', 'error'); return; }
-    const updates = { source, customer, orderNo, product, qty, status, logisticsNo, remark, images: rowImagesMap[idx] || [], logisticsImages: [], updatedAt: new Date().toISOString() };
+    const updates = { source, customer, orderNo, product, qty, status, logisticsNo, remark, images: publicImages.slice(), logisticsImages: [], updatedAt: new Date().toISOString() };
     if (isCloudReady) {
       const success = await cloudUpdateOrder(editingId, updates);
       if (success) showToast('订单已更新（云端同步）', 'success');
@@ -1825,7 +1840,7 @@ async function handleSaveAllOrders() {
       const status = document.getElementById(`rowStatus-${idx}`).value;
       const logisticsNo = document.getElementById(`rowLogistics-${idx}`).value.trim();
       if (!orderNo || qty <= 0) continue;
-      const newOrder = { source, customer, orderNo, product, qty, status, logisticsNo, remark, images: rowImagesMap[idx] || [], logisticsImages: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+      const newOrder = { source, customer, orderNo, product, qty, status, logisticsNo, remark, images: publicImages.slice(), logisticsImages: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
       if (isCloudReady) {
         const success = await cloudAddOrder(newOrder);
         if (success) successCount++; else failCount++;
