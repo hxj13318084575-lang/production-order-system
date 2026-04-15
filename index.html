@@ -1553,17 +1553,18 @@ function addOrderRow(data) {
       </div>
     </div>
     <div class="form-group">
-      <label>商品图片（点击上传或拖入图片，可多张）</label>
+      <label>商品图片（拖入图片或直接粘贴截图，可多张）</label>
       <div class="upload-zone" style="min-height:100px;padding:12px;" id="rowUploadZone-${idx}"
-           onclick="document.getElementById('rowFile-${idx}').click()"
            ondragover="handleDragOver(event, this)"
            ondragleave="handleDragLeave(event, this)"
            ondrop="handleRowDragDrop(event, ${idx}, this)">
         <input type="file" id="rowFile-${idx}" multiple accept="image/*" style="display:none" onchange="handleRowFileSelect(event, ${idx})">
         <div id="rowUploadPlaceholder-${idx}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:32px;height:32px;color:var(--gray-400);margin-bottom:4px;"><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-          <div class="hint">点击上传、拖入图片或直接粘贴截图</div>
-          <div class="hint-sub">支持截图直接 Ctrl+V 粘贴</div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <button type="button" class="btn btn-sm" style="padding:4px 12px;font-size:13px;" onclick="event.stopPropagation();document.getElementById('rowFile-${idx}').click()">📷 点击上传</button>
+            <span style="color:var(--gray-400);font-size:12px;">拖入图片或截图后 Ctrl+V 粘贴</span>
+          </div>
         </div>
         <div id="rowPreviewGrid-${idx}" class="preview-grid" style="display:none;"></div>
       </div>
@@ -1622,17 +1623,6 @@ document.addEventListener('paste', function(e) {
   }
   if (imageFiles.length === 0) return;
   e.preventDefault();
-  // 如果没有激活行，自动激活最后一行
-  if (bulkAddActiveRow < 0) {
-    const rows = document.querySelectorAll('.bulk-row');
-    if (rows.length > 0) {
-      const lastRow = rows[rows.length - 1];
-      const clickArea = lastRow.querySelector('.img-upload-area');
-      if (clickArea) {
-        clickArea.click();
-      }
-    }
-  }
   // 添加到最后一个有图片区域的行
   const rows = document.querySelectorAll('.bulk-row');
   if (rows.length > 0) {
