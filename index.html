@@ -1563,7 +1563,8 @@ function addOrderRow(data) {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:32px;height:32px;color:var(--gray-400);margin-bottom:4px;"><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
             <button type="button" class="btn btn-sm" style="padding:4px 12px;font-size:13px;" onclick="event.stopPropagation();document.getElementById('rowFile-${idx}').click()">📷 点击上传</button>
-            <span style="color:var(--gray-400);font-size:12px;">拖入图片或截图后 Ctrl+V 粘贴</span>
+            <button type="button" class="btn btn-sm" style="padding:4px 12px;font-size:13px;background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;" onclick="event.stopPropagation();pasteFromClipboard()">📋 粘贴截图</button>
+            <span style="color:var(--gray-400);font-size:12px;">或拖入图片 / Ctrl+V粘贴</span>
           </div>
         </div>
         <div id="rowPreviewGrid-${idx}" class="preview-grid" style="display:none;"></div>
@@ -1609,48 +1610,94 @@ function handleRowDragDrop(event, rowIdx, el) {
   addRowImagesFromFiles(rowIdx, Array.from(event.dataTransfer.files));
 }
 
+// ========== 粘贴截图功能 ==========
 // 粘贴截图支持 - 新增订单弹窗
 document.addEventListener('paste', function(e) {
   const modal = document.getElementById('orderModal');
   if (!modal || !modal.classList.contains('show')) return;
+  e.preventDefault();
 
-  // 优先从 clipboardData.files 获取截图（最可靠）
+  // 方式1：从 clipboardData.files 获取
   const files = Array.from(e.clipboardData && e.clipboardData.files || []);
   const imageFiles = files.filter(f => f.type.startsWith('image/'));
+  if (imageFiles.length > 0) {
+    const rows = document.querySelectorAll('.bulk-row');
+    if (rows.length > 0) addRowImagesFromFiles(rows.length - 1, imageFiles);
+    return;
+  }
 
-  // 如果files里没有，尝试从items获取（兼容旧浏览器）
-  if (imageFiles.length === 0 && e.clipboardData && e.clipboardData.items) {
-    for (let i = 0; i < e.clipboardData.items.length; i++) {
-      const item = e.clipboardData.items[i];
-      if (item.type.indexOf('image') !== -1) {
-        const file = item.getAsFile();
-        if (file) {
-          imageFiles.push(file);
-        } else {
-          // getAsFile为null时，直接用items[i]的getAsString读取blob
-          item.getAsString((s) => {
-            // base64图片字符串转为blob
-            const byteString = atob(s.split(',')[1]);
-            const mimeType = s.match(/data:([^;]+)/)[1];
-            const ab = new ArrayBuffer(byteString.length);
-            const ia = new Uint8Array(ab);
-            for (let j = 0; j < byteString.length; j++) ia[j] = byteString.charCodeAt(j);
-            const blob = new Blob([ab], { type: mimeType });
-            blob.lastModified = Date.now();
-            blob.name = 'screenshot.png';
-            const rows = document.querySelectorAll('.bulk-row');
-            if (rows.length > 0) addRowImagesFromFiles(rows.length - 1, [blob]);
-          });
-        }
+  // 方式2：从 clipboardData.items 获取
+  const items = e.clipboardData && e.clipboardData.items;
+  if (!items) { showToast('无法访问剪贴板，请使用截图工具截图后再试', 'error'); return; }
+  let found = false;
+  for (let i = 0; i < items.length; i++) {
+    if (items[i].type.indexOf('image') !== -1) {
+      found = true;
+      const file = items[i].getAsFile();
+      if (file) {
+        const rows = document.querySelectorAll('.bulk-row');
+        if (rows.length > 0) addRowImagesFromFiles(rows.length - 1, [file]);
+      } else {
+        // getAsFile返回null时，尝试读取为base64字符串
+        const FR = new FileReader();
+        FR.onload = () => {
+          const base64 = FR.result;
+          const rows = document.querySelectorAll('.bulk-row');
+          if (rows.length > 0) {
+            if (!rowImagesMap[rows.length - 1]) rowImagesMap[rows.length - 1] = [];
+            rowImagesMap[rows.length - 1].push(base64);
+            updateRowPreview(rows.length - 1);
+          }
+        };
+        items[i].getAsString && items[i].getAsString(s => {
+          if (s && s.startsWith('data:')) FR.readAsDataURL(new Blob([s], {type: items[i].type}));
+        });
       }
     }
   }
-
-  if (imageFiles.length === 0) return;
-  e.preventDefault();
-  const rows = document.querySelectorAll('.bulk-row');
-  if (rows.length > 0) addRowImagesFromFiles(rows.length - 1, imageFiles);
+  if (!found) showToast('剪贴板中没有图片，请先截图后再粘贴', 'error');
 });
+
+// 粘贴按钮 - 点击直接读取剪贴板图片
+async function pasteFromClipboard() {
+  const rows = document.querySelectorAll('.bulk-row');
+  if (rows.length === 0) { showToast('请先生成订单行', 'error'); return; }
+  const lastIdx = rows.length - 1;
+
+  try {
+    // 尝试用Clipboard API（需要HTTPS）
+    const items = await navigator.clipboard.read();
+    for (const item of items) {
+      for (const type of item.types) {
+        if (type.startsWith('image/')) {
+          const blob = await item.getType(type);
+          if (!rowImagesMap[lastIdx]) rowImagesMap[lastIdx] = [];
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            rowImagesMap[lastIdx].push(e.target.result);
+            updateRowPreview(lastIdx);
+            showToast('截图已粘贴到最后一个订单行', 'success');
+          };
+          reader.readAsDataURL(blob);
+          return;
+        }
+      }
+    }
+    showToast('剪贴板中没有图片，请先截图', 'error');
+  } catch (err) {
+    // Clipboard API失败，尝试传统方式
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.click();
+    input.onchange = () => {
+      if (input.files && input.files[0]) {
+        addRowImagesFromFiles(lastIdx, [input.files[0]]);
+        showToast('截图已添加到最后一个订单行', 'success');
+      }
+    };
+  }
+}
 
 function updateRowPreview(rowIdx) {
   const grid = document.getElementById(`rowPreviewGrid-${rowIdx}`);
