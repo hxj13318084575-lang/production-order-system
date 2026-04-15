@@ -418,7 +418,7 @@
       flex: 1; min-width: 0; word-break: break-all; line-height: 1.5;
     }
     .mobile-imgs {
-      display: flex; gap: 8px; flex-wrap: wrap;
+      display: flex; gap: 8px; flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch;
     }
     .mobile-imgs img {
       width: 64px; height: 64px; object-fit: cover; border-radius: 8px;
@@ -838,10 +838,10 @@ const ROLES = {
 
 // ========== 密码配置 ==========
 const ROLE_PASSWORDS = {
-  'admin': 'admin888',
-  'plan': 'plan123',
-  'production': 'prod123',
-  'pack': 'pack123'
+  'admin': 'a123',
+  'plan': '0666',
+  'production': null, // 免密码
+  'pack': '0888'
 };
 
 // ========== 云数据库初始化 ==========
@@ -1080,6 +1080,11 @@ let pendingRole = null;
 
 function login(role) {
   pendingRole = role;
+  // 生产车间免密码直接登录
+  if (ROLE_PASSWORDS[role] === null) {
+    doLogin(role);
+    return;
+  }
   const r = ROLES[role];
   const prompt = document.getElementById('loginPrompt');
   document.getElementById('promptTitle').textContent = r.name + ' 登录';
@@ -1122,8 +1127,8 @@ function doLogin(role) {
   document.getElementById('btnAdd').style.display = r.canEdit ? '' : 'none';
   document.getElementById('btnPerm').style.display = r.canManagePerm ? '' : 'none';
 
-  // 根据角色控制列显示
-  const showLogistics = r.canShip || r.canEdit;
+  // 根据角色控制列显示 - 物流仅打包发货可见
+  const showLogistics = r.canShip;
   document.getElementById('thLogisticsNo').style.display = showLogistics ? '' : 'none';
   document.getElementById('thLogisticsImg').style.display = showLogistics ? '' : 'none';
 
@@ -1262,24 +1267,22 @@ async function renderTable() {
     }
     // 其他角色可以切换所有状态（admin、plan、pack）
 
-    // 图片展示 - 直接显示可点击放大
+    // 图片展示 - 直接显示可点击放大，横向并排
     let imgHtml = '';
     if (displayImages.length > 0) {
-      imgHtml = '<div style="display:flex;gap:6px;flex-wrap:wrap;">';
       displayImages.forEach((img, imgIdx) => {
-        imgHtml += `<img src="${img}" alt="商品图片" style="width:64px;height:64px;object-fit:cover;border-radius:8px;cursor:zoom-in;border:1px solid var(--gray-200);box-shadow:0 1px 3px rgba(0,0,0,0.08);" onclick="showImgModal('${img.replace(/'/g, "\\'")}')">`;
+        imgHtml += `<img src="${img}" alt="商品图片" style="width:64px;height:64px;object-fit:cover;border-radius:8px;cursor:zoom-in;border:1px solid var(--gray-200);box-shadow:0 1px 3px rgba(0,0,0,0.08);flex-shrink:0;" onclick="showImgModal('${img.replace(/'/g, "\\'")}')">`;
       });
       // 编辑角色可以拖拽上传
       if (role.canEdit) {
-        imgHtml += `<div class="img-preview-container" style="width:64px;height:64px;" ondragover="handleDragOver(event, this)" ondragleave="handleDragLeave(event, this)" ondrop="handleTableDrop(event, '${orderId}', this)"><div class="placeholder" style="font-size:10px;">拖入</div></div>`;
+        imgHtml += `<div class="img-preview-container" style="width:64px;height:64px;flex-shrink:0;" ondragover="handleDragOver(event, this)" ondragleave="handleDragLeave(event, this)" ondrop="handleTableDrop(event, '${orderId}', this)"><div class="placeholder" style="font-size:10px;">拖入</div></div>`;
       }
-      imgHtml += '</div>';
     } else {
-      imgHtml = '<div class="img-preview-container" ';
+      imgHtml = '<div class="img-preview-container" style="width:64px;height:64px;flex-shrink:0;" ';
       if (role.canEdit) {
         imgHtml += `ondragover="handleDragOver(event, this)" ondragleave="handleDragLeave(event, this)" ondrop="handleTableDrop(event, '${orderId}', this)" `;
       }
-      imgHtml += '><div class="placeholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg><span>无图片</span></div></div>';
+      imgHtml += '><div class="placeholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg><span>无</span></div></div>';
     }
 
     // 状态按钮
@@ -1304,8 +1307,8 @@ async function renderTable() {
       statusHtml = `<span class="status-badge ${st.cls}"><span class="dot"></span>${st.name}</span>`;
     }
 
-    // 物流信息 - 仅打包发货和管理员可见
-    const showLogistics = role.canShip || role.canEdit;
+    // 物流信息 - 仅打包发货可见
+    const showLogistics = role.canShip;
 
     // 物流单号HTML
     let logisticsNoHtml = '';
@@ -1318,18 +1321,16 @@ async function renderTable() {
         logisticsNoHtml = order.logisticsNo ? `<span class="order-id" style="background:#e6f4ea;color:#1e8e3e;">${escapeHtml(order.logisticsNo)}</span>` : '-';
       }
 
-      // 物流单图片
+      // 物流单图片 - 横向并排
       if (displayLogImages.length > 0) {
-        logisticsImgHtml = '<div style="display:flex;gap:6px;flex-wrap:wrap;">';
         displayLogImages.forEach((img, imgIdx) => {
-          logisticsImgHtml += `<img src="${img}" alt="物流单" style="width:54px;height:54px;object-fit:cover;border-radius:8px;cursor:zoom-in;border:1px solid var(--gray-200);box-shadow:0 1px 3px rgba(0,0,0,0.08);" onclick="showImgModal('${img.replace(/'/g, "\\'")}')">`;
+          logisticsImgHtml += `<img src="${img}" alt="物流单" style="width:54px;height:54px;object-fit:cover;border-radius:8px;cursor:zoom-in;border:1px solid var(--gray-200);box-shadow:0 1px 3px rgba(0,0,0,0.08);flex-shrink:0;" onclick="showImgModal('${img.replace(/'/g, "\\'")}')">`;
         });
         if (role.canEdit || role.canShip) {
-          logisticsImgHtml += `<div class="img-preview-container img-preview-sm" style="width:54px;height:54px;" ondragover="handleDragOver(event, this)" ondragleave="handleDragLeave(event, this)" ondrop="handleLogisticsDrop(event, '${orderId}', this)"><div class="placeholder" style="font-size:10px;">拖入</div></div>`;
+          logisticsImgHtml += `<div class="img-preview-container img-preview-sm" style="width:54px;height:54px;flex-shrink:0;" ondragover="handleDragOver(event, this)" ondragleave="handleDragLeave(event, this)" ondrop="handleLogisticsDrop(event, '${orderId}', this)"><div class="placeholder" style="font-size:10px;">拖入</div></div>`;
         }
-        logisticsImgHtml += '</div>';
       } else {
-        logisticsImgHtml = '<div class="img-preview-container img-preview-sm" ';
+        logisticsImgHtml = '<div class="img-preview-container img-preview-sm" style="width:54px;height:54px;flex-shrink:0;" ';
         if (role.canEdit || role.canShip) {
           logisticsImgHtml += `ondragover="handleDragOver(event, this)" ondragleave="handleDragLeave(event, this)" ondrop="handleLogisticsDrop(event, '${orderId}', this)" `;
         }
@@ -1407,15 +1408,15 @@ async function renderTable() {
       desktop: `
       <tr class="${rowCls}">
         <td><span class="seq-num">${idx + 1}</span></td>
-        <td><span class="source-tag ${src.cls}">${src.name}</span></td>
+        <td>${role.canEdit ? `<span class="editable-cell" onclick="editSourceInline('${orderId}', this)" title="点击选择来源" data-source="${order.source || ''}"><span class="source-tag ${src.cls}">${src.name}</span></span>` : `<span class="source-tag ${src.cls}">${src.name}</span>`}</td>
         <td style="font-weight:500;">${escapeHtml(order.customer || '-')}</td>
-        <td><span class="order-id">${escapeHtml(order.orderNo || '-')}</span></td>
-        <td>${escapeHtml(order.product || '-')}</td>
-        <td><span class="quantity-display">${order.qty || 0}</span></td>
+        <td><span class="editable-cell" onclick="editFieldInline('${orderId}', 'orderNo', this)" title="点击编辑">${escapeHtml(order.orderNo || '-')}</span></td>
+        <td><span class="editable-cell" onclick="editFieldInline('${orderId}', 'product', this)" title="点击编辑">${escapeHtml(order.product || '-')}</span></td>
+        <td><span class="editable-cell" onclick="editFieldInline('${orderId}', 'qty', this, 'number')" title="点击编辑"><span class="quantity-display">${order.qty || 0}</span></span></td>
         <td>${statusHtml}</td>
-        <td class="img-cell">${imgHtml}</td>
-        ${showLogistics ? `<td>${logisticsNoHtml}</td><td class="img-cell">${logisticsImgHtml}</td>` : ''}
-        <td style="max-width:220px; font-size:15px; color:var(--gray-600); line-height:1.5;">${escapeHtml(order.remark || '-')}</td>
+        <td class="img-cell" style="width:auto;min-width:180px;"><div style="display:flex;gap:6px;flex-wrap:nowrap;align-items:center;">${imgHtml}</div></td>
+        ${showLogistics ? `<td>${logisticsNoHtml}</td><td class="img-cell" style="width:auto;min-width:120px;"><div style="display:flex;gap:6px;flex-wrap:nowrap;align-items:center;">${logisticsImgHtml}</div></td>` : ''}
+        <td style="max-width:220px; font-size:15px; color:var(--gray-600); line-height:1.5;"><span class="editable-cell" onclick="editFieldInline('${orderId}', 'remark', this)" title="点击编辑">${escapeHtml(order.remark || '-')}</span></td>
         <td><span class="date-text">${formatDate(order.createdAt)}</span></td>
         <td><span class="date-text">${order.completedAt ? formatDate(order.completedAt) : '<span style="color:#ccc;">-</span>'}</span></td>
         <td>${actionHtml}</td>
@@ -2030,6 +2031,105 @@ async function saveLogisticsNo(orderId, input) {
     const order = orders.find(o => (o._id === orderId || o.id === orderId));
     if (order) {
       order.logisticsNo = value;
+      await saveOrders(orders);
+    }
+  }
+  renderTable();
+}
+
+// ========== 通用字段内联编辑 ==========
+async function editFieldInline(orderId, field, el, type) {
+  let order = null;
+  if (isCloudReady) {
+    try {
+      const result = await cloudDb.collection(COLLECTION).doc(orderId).get();
+      order = result.data;
+    } catch (err) {}
+  }
+  if (!order) {
+    const orders = getLocalOrders();
+    order = orders.find(o => (o._id === orderId || o.id === orderId));
+  }
+  if (!order) return;
+
+  const currentVal = order[field] || '';
+  const isQty = field === 'qty';
+  const isRemark = field === 'remark';
+  const inputType = type === 'number' ? 'number' : (isRemark ? '' : 'text');
+  const inputTag = isRemark ? 'textarea' : 'input';
+
+  const commonAttrs = `class="inline-input" ${inputTag === 'input' ? `type="${inputType}"` : ''} value="${escapeHtml(String(currentVal))}" style="${isRemark ? 'width:180px;height:40px;resize:none;' : (isQty ? 'width:80px;' : 'width:160px;')}"
+    onblur="saveFieldInline('${orderId}', '${field}', this)"
+    onkeydown="if(event.key==='Enter' && !${isRemark}) this.blur(); if(event.key==='Escape'){renderTable();}">`;
+
+  if (isRemark) {
+    el.innerHTML = `<textarea ${commonAttrs}>${escapeHtml(String(currentVal))}</textarea>`;
+  } else {
+    el.innerHTML = `<input ${commonAttrs}>`;
+  }
+  const input = el.querySelector('input, textarea');
+  input.focus();
+  if (!isRemark) input.select();
+}
+
+async function saveFieldInline(orderId, field, input) {
+  let value = input.value.trim();
+  if (field === 'qty') value = parseInt(value) || 0;
+
+  if (isCloudReady) {
+    try {
+      await cloudDb.collection(COLLECTION).doc(orderId).update({
+        [field]: value, updatedAt: new Date().toISOString()
+      });
+      showToast('已更新', 'success');
+    } catch (err) {
+      const orders = getLocalOrders();
+      const order = orders.find(o => (o._id === orderId || o.id === orderId));
+      if (order) { order[field] = value; await saveOrders(orders); }
+    }
+  } else {
+    const orders = getLocalOrders();
+    const order = orders.find(o => (o._id === orderId || o.id === orderId));
+    if (order) {
+      order[field] = value;
+      await saveOrders(orders);
+    }
+  }
+  renderTable();
+}
+
+// ========== 订单来源内联编辑 ==========
+function editSourceInline(orderId, el) {
+  const currentSource = el.getAttribute('data-source') || '';
+  const options = Object.entries(SOURCES).map(([key, val]) =>
+    `<option value="${key}" ${key === currentSource ? 'selected' : ''}>${val.name}</option>`
+  ).join('');
+
+  el.innerHTML = `<select class="inline-input" style="width:130px;" onchange="saveSourceInline('${orderId}', this)" onblur="renderTable()">
+    ${options}
+  </select>`;
+  const sel = el.querySelector('select');
+  sel.focus();
+}
+
+async function saveSourceInline(orderId, sel) {
+  const value = sel.value;
+  if (isCloudReady) {
+    try {
+      await cloudDb.collection(COLLECTION).doc(orderId).update({
+        source: value, updatedAt: new Date().toISOString()
+      });
+      showToast('订单来源已更新', 'success');
+    } catch (err) {
+      const orders = getLocalOrders();
+      const order = orders.find(o => (o._id === orderId || o.id === orderId));
+      if (order) { order.source = value; await saveOrders(orders); }
+    }
+  } else {
+    const orders = getLocalOrders();
+    const order = orders.find(o => (o._id === orderId || o.id === orderId));
+    if (order) {
+      order.source = value;
       await saveOrders(orders);
     }
   }
