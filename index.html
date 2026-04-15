@@ -1410,13 +1410,13 @@ async function renderTable() {
         <td><span class="seq-num">${idx + 1}</span></td>
         <td>${role.canEdit ? `<span class="editable-cell" onclick="editSourceInline('${orderId}', this)" title="点击选择来源" data-source="${order.source || ''}"><span class="source-tag ${src.cls}">${src.name}</span></span>` : `<span class="source-tag ${src.cls}">${src.name}</span>`}</td>
         <td style="font-weight:500;">${escapeHtml(order.customer || '-')}</td>
-        <td><span class="editable-cell" onclick="editFieldInline('${orderId}', 'orderNo', this)" title="点击编辑">${escapeHtml(order.orderNo || '-')}</span></td>
-        <td><span class="editable-cell" onclick="editFieldInline('${orderId}', 'product', this)" title="点击编辑">${escapeHtml(order.product || '-')}</span></td>
-        <td><span class="editable-cell" onclick="editFieldInline('${orderId}', 'qty', this, 'number')" title="点击编辑"><span class="quantity-display">${order.qty || 0}</span></span></td>
+        <td>${(role.canEdit || role.canShip) ? `<span class="editable-cell" onclick="editFieldInline('${orderId}', 'orderNo', this)" title="点击编辑">${escapeHtml(order.orderNo || '-')}</span>` : `<span>${escapeHtml(order.orderNo || '-')}</span>`}</td>
+        <td>${role.canEdit ? `<span class="editable-cell" onclick="editFieldInline('${orderId}', 'product', this)" title="点击编辑">${escapeHtml(order.product || '-')}</span>` : `<span>${escapeHtml(order.product || '-')}</span>`}</td>
+        <td>${role.canEdit ? `<span class="editable-cell" onclick="editFieldInline('${orderId}', 'qty', this, 'number')" title="点击编辑"><span class="quantity-display">${order.qty || 0}</span></span>` : `<span class="quantity-display">${order.qty || 0}</span>`}</td>
         <td>${statusHtml}</td>
         <td class="img-cell" style="width:auto;min-width:180px;"><div style="display:flex;gap:6px;flex-wrap:nowrap;align-items:center;">${imgHtml}</div></td>
         ${showLogistics ? `<td>${logisticsNoHtml}</td><td class="img-cell" style="width:auto;min-width:120px;"><div style="display:flex;gap:6px;flex-wrap:nowrap;align-items:center;">${logisticsImgHtml}</div></td>` : ''}
-        <td style="max-width:220px; font-size:15px; color:var(--gray-600); line-height:1.5;"><span class="editable-cell" onclick="editFieldInline('${orderId}', 'remark', this)" title="点击编辑">${escapeHtml(order.remark || '-')}</span></td>
+        <td style="max-width:220px; font-size:15px; color:var(--gray-600); line-height:1.5;">${role.canEdit ? `<span class="editable-cell" onclick="editFieldInline('${orderId}', 'remark', this)" title="点击编辑">${escapeHtml(order.remark || '-')}</span>` : `<span>${escapeHtml(order.remark || '-')}</span>`}</td>
         <td><span class="date-text">${formatDate(order.createdAt)}</span></td>
         <td><span class="date-text">${order.completedAt ? formatDate(order.completedAt) : '<span style="color:#ccc;">-</span>'}</span></td>
         <td>${actionHtml}</td>
@@ -1496,8 +1496,10 @@ async function changeStatus(id, newStatus) {
   renderTable();
 }
 
-document.addEventListener('click', function() {
-  document.querySelectorAll('.status-dropdown.show').forEach(d => d.classList.remove('show'));
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.inline-input') && !sourceSelectActive) {
+    document.querySelectorAll('.status-dropdown.show').forEach(d => d.classList.remove('show'));
+  }
 });
 
 // ========== 新增/编辑弹窗（支持多订单行） ==========
@@ -2099,17 +2101,26 @@ async function saveFieldInline(orderId, field, input) {
 }
 
 // ========== 订单来源内联编辑 ==========
+let sourceSelectActive = false;
 function editSourceInline(orderId, el) {
   const currentSource = el.getAttribute('data-source') || '';
   const options = Object.entries(SOURCES).map(([key, val]) =>
     `<option value="${key}" ${key === currentSource ? 'selected' : ''}>${val.name}</option>`
   ).join('');
 
-  el.innerHTML = `<select class="inline-input" style="width:130px;" onchange="saveSourceInline('${orderId}', this)" onblur="renderTable()">
+  sourceSelectActive = true;
+  el.innerHTML = `<select class="inline-input" style="width:130px;" onclick="event.stopPropagation()" onchange="saveSourceInline('${orderId}', this)" onblur="sourceSelectBlur()">
     ${options}
   </select>`;
   const sel = el.querySelector('select');
   sel.focus();
+}
+
+function sourceSelectBlur() {
+  setTimeout(() => {
+    sourceSelectActive = false;
+    renderTable();
+  }, 200);
 }
 
 async function saveSourceInline(orderId, sel) {
