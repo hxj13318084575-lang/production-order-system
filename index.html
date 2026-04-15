@@ -1593,7 +1593,7 @@ function handleRowFileSelect(event, rowIdx) {
 function addRowImagesFromFiles(rowIdx, files) {
   if (!rowImagesMap[rowIdx]) rowImagesMap[rowIdx] = [];
   files.forEach(f => {
-    if (!f.type.startsWith('image/')) return;
+    if (!f || !f.type || !f.type.startsWith('image/')) return;
     const reader = new FileReader();
     reader.onload = (e) => {
       rowImagesMap[rowIdx].push(e.target.result);
@@ -1610,27 +1610,46 @@ function handleRowDragDrop(event, rowIdx, el) {
 }
 
 // 粘贴截图支持 - 新增订单弹窗
-let bulkAddActiveRow = -1;
 document.addEventListener('paste', function(e) {
   const modal = document.getElementById('orderModal');
   if (!modal || !modal.classList.contains('show')) return;
-  const items = e.clipboardData && e.clipboardData.items;
-  if (!items) return;
-  const imageFiles = [];
-  for (let i = 0; i < items.length; i++) {
-    if (items[i].type.indexOf('image') !== -1) {
-      imageFiles.push(items[i].getAsFile());
+
+  // 优先从 clipboardData.files 获取截图（最可靠）
+  const files = Array.from(e.clipboardData && e.clipboardData.files || []);
+  const imageFiles = files.filter(f => f.type.startsWith('image/'));
+
+  // 如果files里没有，尝试从items获取（兼容旧浏览器）
+  if (imageFiles.length === 0 && e.clipboardData && e.clipboardData.items) {
+    for (let i = 0; i < e.clipboardData.items.length; i++) {
+      const item = e.clipboardData.items[i];
+      if (item.type.indexOf('image') !== -1) {
+        const file = item.getAsFile();
+        if (file) {
+          imageFiles.push(file);
+        } else {
+          // getAsFile为null时，直接用items[i]的getAsString读取blob
+          item.getAsString((s) => {
+            // base64图片字符串转为blob
+            const byteString = atob(s.split(',')[1]);
+            const mimeType = s.match(/data:([^;]+)/)[1];
+            const ab = new ArrayBuffer(byteString.length);
+            const ia = new Uint8Array(ab);
+            for (let j = 0; j < byteString.length; j++) ia[j] = byteString.charCodeAt(j);
+            const blob = new Blob([ab], { type: mimeType });
+            blob.lastModified = Date.now();
+            blob.name = 'screenshot.png';
+            const rows = document.querySelectorAll('.bulk-row');
+            if (rows.length > 0) addRowImagesFromFiles(rows.length - 1, [blob]);
+          });
+        }
+      }
     }
   }
+
   if (imageFiles.length === 0) return;
   e.preventDefault();
-  // 添加到最后一个有图片区域的行
   const rows = document.querySelectorAll('.bulk-row');
-  if (rows.length > 0) {
-    // 找到最后一个存在的行索引
-    const lastIdx = rows.length - 1;
-    addRowImagesFromFiles(lastIdx, imageFiles);
-  }
+  if (rows.length > 0) addRowImagesFromFiles(rows.length - 1, imageFiles);
 });
 
 function updateRowPreview(rowIdx) {
