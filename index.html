@@ -1609,10 +1609,11 @@ function handleRowDragDrop(event, rowIdx, el) {
   addRowImagesFromFiles(rowIdx, Array.from(event.dataTransfer.files));
 }
 
-// 粘贴截图支持 - 批量新增订单
+// 粘贴截图支持 - 新增订单弹窗
 let bulkAddActiveRow = -1;
 document.addEventListener('paste', function(e) {
-  if (!document.getElementById('bulkAddModal') || document.getElementById('bulkAddModal').style.display !== 'flex') return;
+  const modal = document.getElementById('orderModal');
+  if (!modal || !modal.classList.contains('show')) return;
   const items = e.clipboardData && e.clipboardData.items;
   if (!items) return;
   const imageFiles = [];
