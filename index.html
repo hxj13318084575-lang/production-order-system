@@ -2007,11 +2007,12 @@ async function editLogisticsNo(orderId, el) {
 
   const currentValue = order.logisticsNo || '';
   el.innerHTML = `<input class="inline-input" type="text" value="${escapeHtml(currentValue)}"
+    style="border:2px solid #1890ff;"
     onblur="saveLogisticsNo('${orderId}', this)"
     onkeydown="if(event.key==='Enter') this.blur(); if(event.key==='Escape'){renderTable();}">`;
   const input = el.querySelector('input');
   input.focus();
-  input.select();
+  // 不全选，避免误操作删除内容
 }
 
 async function saveLogisticsNo(orderId, input) {
@@ -2060,7 +2061,7 @@ async function editFieldInline(orderId, field, el, type) {
   const inputType = type === 'number' ? 'number' : (isRemark ? '' : 'text');
   const inputTag = isRemark ? 'textarea' : 'input';
 
-  const commonAttrs = `class="inline-input" ${inputTag === 'input' ? `type="${inputType}"` : ''} value="${escapeHtml(String(currentVal))}" style="${isRemark ? 'width:180px;height:40px;resize:none;' : (isQty ? 'width:80px;' : 'width:160px;')}"
+  const commonAttrs = `class="inline-input" ${inputTag === 'input' ? `type="${inputType}"` : ''} value="${escapeHtml(String(currentVal))}" style="${isRemark ? 'width:180px;height:40px;resize:none;' : (isQty ? 'width:80px;' : 'width:160px;')}border:2px solid #1890ff;"
     onblur="saveFieldInline('${orderId}', '${field}', this)"
     onkeydown="if(event.key==='Enter' && !${isRemark}) this.blur(); if(event.key==='Escape'){renderTable();}">`;
 
@@ -2071,7 +2072,7 @@ async function editFieldInline(orderId, field, el, type) {
   }
   const input = el.querySelector('input, textarea');
   input.focus();
-  if (!isRemark) input.select();
+  // 不全选，将光标放到末尾，避免误操作删除内容
 }
 
 async function saveFieldInline(orderId, field, input) {
